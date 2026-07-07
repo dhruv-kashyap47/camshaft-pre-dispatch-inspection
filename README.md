@@ -1,6 +1,6 @@
-# CamTrace — Camshaft Pre-Dispatch Inspection & Traceability
+# Camshaft Pre-Dispatch Inspection & Traceability
 
-**CamTrace** is a production-ready Manufacturing Execution / Quality Inspection platform for camshaft inspection and traceability at Cummins manufacturing facilities.
+ A production-ready Manufacturing Execution / Quality Inspection platform for camshaft inspection and traceability at Cummins manufacturing facilities.
 
 ## Technology Stack
 
@@ -82,7 +82,3 @@ Execute in order:
 OpenAPI docs: http://localhost:8000/docs
 
 See [docs/api.md](docs/api.md) for endpoint reference.
-
-## License
-
-Proprietary — Cummins Manufacturing
