@@ -20,6 +20,9 @@ BEGIN
     INSERT INTO audit_logs (user_id, action, entity_name, entity_id, old_value, new_value, details)
     VALUES (p_user_id, p_action, p_entity_name, p_entity_id, p_old_value, p_new_value, p_details);
     COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
 END pr_audit_log;
 /
 
@@ -270,6 +273,9 @@ BEGIN
             pr_audit_log(:NEW.user_id, 'PASSWORD_CHANGE', 'USER', TO_CHAR(:NEW.user_id));
         END IF;
     END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
 END;
 /
 
@@ -285,6 +291,9 @@ BEGIN
         pr_audit_log(:NEW.operator_id, 'STATUS_CHANGE_' || :NEW.status, 'INSPECTION',
                      :NEW.inspection_no, :OLD.status, :NEW.status);
     END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
 END;
 /
 
@@ -335,6 +344,9 @@ FOR EACH ROW
 BEGIN
     pr_audit_log(NULL, 'PHOTO_UPLOAD', 'PHOTO', TO_CHAR(:NEW.photo_id),
                  NULL, :NEW.file_name, 'inspection_id: ' || :NEW.inspection_id);
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
 END;
 /
 

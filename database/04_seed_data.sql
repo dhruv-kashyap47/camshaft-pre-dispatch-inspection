@@ -2,6 +2,8 @@
 -- CamTrace Seed Data for Oracle 19c
 -- ============================================================================
 
+SET DEFINE OFF;
+
 -- ROLES
 INSERT INTO roles (role_name, description) VALUES ('OPERATOR', 'Shop-floor inspection operator');
 INSERT INTO roles (role_name, description) VALUES ('MANAGER', 'Quality approval manager');
@@ -87,3 +89,5 @@ INSERT INTO checklist_items (machine_family, item_code, prompt, sequence_no, req
 VALUES ('CAMSHAFT', 'LASER_MARK', 'Laser Marking Verification — legibility and accuracy of part number / serial number / date code', 17, 'Y', 'Y');
 
 COMMIT;
+
+SET DEFINE ON;

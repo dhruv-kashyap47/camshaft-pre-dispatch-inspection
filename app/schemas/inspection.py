@@ -31,7 +31,11 @@ class ChecklistAnswer(BaseModel):
 class PhotoMetadataRequest(BaseModel):
     inspection_id: int = Field(gt=0)
     checklist_item_id: int | None = Field(default=None, gt=0)
-    file_name: str = Field(min_length=1, max_length=120, pattern=r"^[\w\-\.]+\.(jpg|jpeg|png|gif|bmp|webp)$")
+    file_name: str = Field(
+        min_length=1,
+        max_length=120,
+        pattern=r"^[\w\-\.]+\.(jpg|jpeg|png|gif|bmp|webp)$",
+    )
 
 
 class SubmitInspectionRequest(BaseModel):
@@ -57,9 +61,9 @@ class RejectInspectionRequest(BaseModel):
 
 
 class ChecklistItemResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    id: int
+    id: int = Field(validation_alias="checklist_item_id")
     item_code: str
     prompt: str
     requires_photo: bool
@@ -67,9 +71,9 @@ class ChecklistItemResponse(BaseModel):
 
 
 class InspectionSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    id: int
+    id: int = Field(validation_alias="inspection_id")
     inspection_no: str
     status: str
     started_at: datetime

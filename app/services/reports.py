@@ -9,19 +9,23 @@ from app.schemas.report import ReportRow
 
 def inspection_status_report(db: Session) -> list[ReportRow]:
     rows = db.execute(
-        select(Inspection.status, func.count(Inspection.id)).group_by(Inspection.status)
+        select(Inspection.status, func.count(Inspection.inspection_id)).group_by(
+            Inspection.status
+        )
     ).all()
     return [ReportRow(label=status, value=count) for status, count in rows]
 
 
-def daily_inspection_summary(db: Session, report_date: date | None = None) -> list[dict]:
+def daily_inspection_summary(
+    db: Session, report_date: date | None = None
+) -> list[dict]:
     target = report_date or date.today()
     rows = db.execute(
         select(
             Inspection.status,
-            func.count(Inspection.id).label("count"),
+            func.count(Inspection.inspection_id).label("count"),
         )
-        .where(func.date(Inspection.started_at) == target)
+        .where(func.trunc(Inspection.started_at) == target)
         .group_by(Inspection.status)
     ).all()
     return [{"status": row.status, "count": row.count} for row in rows]
@@ -32,11 +36,17 @@ def machine_summary(db: Session) -> list[dict]:
         select(
             Machine.machine_code,
             Machine.machine_name,
-            func.count(Inspection.id).label("total_inspections"),
-            func.sum(sa_case((Inspection.status == "APPROVED", 1), else_=0)).label("approved"),
+            func.count(Inspection.inspection_id).label("total_inspections"),
+            func.sum(
+                sa_case((Inspection.status == "APPROVED", 1), else_=0)
+            ).label("approved"),
         )
-        .outerjoin(Inspection, Inspection.machine_id == Machine.id)
-        .group_by(Machine.id, Machine.machine_code, Machine.machine_name)
+        .outerjoin(
+            Inspection, Inspection.machine_id == Machine.machine_id
+        )
+        .group_by(
+            Machine.machine_id, Machine.machine_code, Machine.machine_name
+        )
     ).all()
     return [dict(row._mapping) for row in rows]
 
@@ -53,7 +63,7 @@ def audit_trail_report(db: Session, limit: int = 500) -> list[dict]:
             User.employee_id,
             User.full_name,
         )
-        .outerjoin(User, User.id == AuditLog.user_id)
+        .outerjoin(User, User.user_id == AuditLog.user_id)
         .order_by(AuditLog.created_at.desc())
         .limit(limit)
     ).all()

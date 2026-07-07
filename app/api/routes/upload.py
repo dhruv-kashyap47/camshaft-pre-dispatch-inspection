@@ -39,7 +39,9 @@ async def upload_photo(
             detail=f"Invalid file type: {file.content_type}. Allowed: {', '.join(ALLOWED_CONTENT_TYPES.keys())}",
         )
 
-    inspection = db.scalar(select(Inspection).where(Inspection.id == inspection_id))
+    inspection = db.scalar(
+        select(Inspection).where(Inspection.inspection_id == inspection_id)
+    )
     if not inspection:
         raise HTTPException(status_code=404, detail="Inspection not found")
 
@@ -49,7 +51,9 @@ async def upload_photo(
 
     ext = ALLOWED_CONTENT_TYPES[file.content_type]
     unique_name = f"{uuid.uuid4().hex}{ext}"
-    inspection_dir = PureWindowsPath(settings.lan_image_root) / inspection.inspection_no
+    inspection_dir = (
+        PureWindowsPath(settings.lan_image_root) / inspection.inspection_no
+    )
 
     try:
         os.makedirs(str(inspection_dir), exist_ok=True)
@@ -58,7 +62,15 @@ async def upload_photo(
             f.write(content)
     except OSError as e:
         logger.error("Failed to save photo: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to save photo to storage")
+        raise HTTPException(
+            status_code=500, detail="Failed to save photo to storage"
+        )
 
-    photo = save_photo_metadata(db, inspection_id, checklist_item_id, unique_name, user)
-    return {"photo_id": photo.id, "file_name": unique_name, "lan_path": str(dest_path)}
+    photo = save_photo_metadata(
+        db, inspection_id, checklist_item_id, unique_name, user
+    )
+    return {
+        "photo_id": photo.photo_id,
+        "file_name": unique_name,
+        "lan_path": str(dest_path),
+    }

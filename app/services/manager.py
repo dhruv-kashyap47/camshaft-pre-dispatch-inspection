@@ -23,9 +23,13 @@ def list_pending_inspections(db: Session) -> list[Inspection]:
 
 
 def get_inspection_detail(db: Session, inspection_id: int) -> Inspection:
-    inspection = db.scalar(select(Inspection).where(Inspection.id == inspection_id))
+    inspection = db.scalar(
+        select(Inspection).where(Inspection.inspection_id == inspection_id)
+    )
     if not inspection:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found"
+        )
     return inspection
 
 
@@ -37,17 +41,21 @@ def override_response(
     reason: str,
     manager: User,
 ) -> Override:
-    inspection = db.scalar(select(Inspection).where(Inspection.id == inspection_id))
+    inspection = db.scalar(
+        select(Inspection).where(Inspection.inspection_id == inspection_id)
+    )
     if not inspection:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found"
+        )
     if inspection.status != "SUBMITTED":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Overrides are only allowed on submitted inspections",
         )
-    if inspection.submitted_at and inspection.submitted_at < datetime.now(timezone.utc) - timedelta(
-        hours=settings.default_manager_override_window_hours
-    ):
+    if inspection.submitted_at and inspection.submitted_at < datetime.now(
+        timezone.utc
+    ) - timedelta(hours=settings.default_manager_override_window_hours):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Override window of {settings.default_manager_override_window_hours} hours has expired",
@@ -60,7 +68,10 @@ def override_response(
         )
     )
     if not response:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection response not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Inspection response not found",
+        )
 
     existing_override = db.scalar(
         select(Override).where(
@@ -76,7 +87,7 @@ def override_response(
 
     row = Override(
         inspection_id=inspection_id,
-        manager_id=manager.id,
+        manager_id=manager.user_id,
         checklist_item_id=checklist_item_id,
         original_result=response.result,
         override_result=override_result,
@@ -86,8 +97,17 @@ def override_response(
     db.add(row)
     db.flush()
     write_audit_log(
-        db, "OVERRIDE", "INSPECTION", inspection.inspection_no, manager.id,
-        {"checklist_item_id": checklist_item_id, "original": row.original_result, "override": override_result, "reason": reason},
+        db,
+        "OVERRIDE",
+        "INSPECTION",
+        inspection.inspection_no,
+        manager.user_id,
+        {
+            "checklist_item_id": checklist_item_id,
+            "original": row.original_result,
+            "override": override_result,
+            "reason": reason,
+        },
     )
     db.commit()
     db.refresh(row)
@@ -100,9 +120,13 @@ def approve_inspection(
     manager: User,
     approval_note: str | None,
 ) -> Inspection:
-    inspection = db.scalar(select(Inspection).where(Inspection.id == inspection_id))
+    inspection = db.scalar(
+        select(Inspection).where(Inspection.inspection_id == inspection_id)
+    )
     if not inspection:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found"
+        )
     if inspection.status != "SUBMITTED":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -114,9 +138,14 @@ def approve_inspection(
     inspection.approved_at = datetime.now(timezone.utc)
     inspection.approval_note = approval_note
     write_audit_log(
-        db, "APPROVAL", "INSPECTION", inspection.inspection_no, manager.id,
+        db,
+        "APPROVAL",
+        "INSPECTION",
+        inspection.inspection_no,
+        manager.user_id,
         {"approval_note": approval_note},
-        old_value=old_status, new_value=inspection.status,
+        old_value=old_status,
+        new_value=inspection.status,
     )
     db.commit()
     db.refresh(inspection)
@@ -129,9 +158,13 @@ def reject_inspection(
     manager: User,
     reason: str,
 ) -> Inspection:
-    inspection = db.scalar(select(Inspection).where(Inspection.id == inspection_id))
+    inspection = db.scalar(
+        select(Inspection).where(Inspection.inspection_id == inspection_id)
+    )
     if not inspection:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found"
+        )
     if inspection.status != "SUBMITTED":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -142,9 +175,14 @@ def reject_inspection(
     inspection.status = "REJECTED"
     inspection.approval_note = reason
     write_audit_log(
-        db, "REJECTION", "INSPECTION", inspection.inspection_no, manager.id,
+        db,
+        "REJECTION",
+        "INSPECTION",
+        inspection.inspection_no,
+        manager.user_id,
         {"reason": reason},
-        old_value=old_status, new_value=inspection.status,
+        old_value=old_status,
+        new_value=inspection.status,
     )
     db.commit()
     db.refresh(inspection)

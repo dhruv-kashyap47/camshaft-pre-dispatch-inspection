@@ -17,10 +17,16 @@ def get_current_user(
     authorization: Annotated[str | None, Header()] = None,
 ) -> User:
     if not authorization:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authorization header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization header",
+        )
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authorization format. Use: Bearer <token>")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization format. Use: Bearer <token>",
+        )
 
     token = parts[1]
     try:
@@ -31,34 +37,57 @@ def get_current_user(
             options={"require": ["sub", "role", "exp", "iat"]},
         )
     except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        ) from exc
 
     user_id = payload.get("sub")
     token_role = payload.get("role")
     if not user_id or not token_role:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing required claims")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing required claims",
+        )
 
     try:
-        user = db.scalar(select(User).where(User.id == int(user_id)))
+        user = db.scalar(
+            select(User).where(User.user_id == int(user_id))
+        )
     except (ValueError, TypeError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user identifier in token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user identifier in token",
+        )
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        )
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated",
+        )
 
-    role = db.scalar(select(Role).where(Role.id == user.role_id))
-    if not role or role.name != token_role:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token role mismatch")
+    role = db.scalar(select(Role).where(Role.role_id == user.role_id))
+    if not role or role.role_name != token_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token role mismatch",
+        )
 
     return user
 
 
 def require_role(*allowed_roles: str):
-    def dependency(current_user: Annotated[User, Depends(get_current_user)], db: DBSession) -> User:
-        role = db.scalar(select(Role).where(Role.id == current_user.role_id))
-        if not role or role.name not in allowed_roles:
+    def dependency(
+        current_user: Annotated[User, Depends(get_current_user)], db: DBSession
+    ) -> User:
+        role = db.scalar(
+            select(Role).where(Role.role_id == current_user.role_id)
+        )
+        if not role or role.role_name not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This endpoint requires one of these roles: {', '.join(allowed_roles)}",

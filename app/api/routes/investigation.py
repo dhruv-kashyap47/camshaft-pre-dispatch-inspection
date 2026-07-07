@@ -18,7 +18,9 @@ def search_inspections(
     inspection_no: str | None = Query(default=None, max_length=40),
     machine_code: str | None = Query(default=None, max_length=30),
     operator_id: int | None = Query(default=None, ge=1),
-    status: str | None = Query(default=None, pattern=r"^(IN_PROGRESS|SUBMITTED|APPROVED|REJECTED)$"),
+    status: str | None = Query(
+        default=None, pattern=r"^(IN_PROGRESS|SUBMITTED|APPROVED|REJECTED)$"
+    ),
     date_from: str | None = Query(default=None, description="YYYY-MM-DD"),
     date_to: str | None = Query(default=None, description="YYYY-MM-DD"),
     limit: int = Query(default=50, ge=1, le=500),
@@ -26,7 +28,7 @@ def search_inspections(
     _=Depends(require_role("MANAGER", "ADMIN")),
 ):
     query = select(
-        Inspection.id,
+        Inspection.inspection_id.label("id"),
         Inspection.inspection_no,
         Inspection.status,
         Inspection.started_at,
@@ -36,13 +38,20 @@ def search_inspections(
         Machine.machine_name,
         User.employee_id,
         User.full_name,
-    ).join(Machine, Machine.id == Inspection.machine_id
-    ).join(User, User.id == Inspection.operator_id)
+    ).join(
+        Machine, Machine.machine_id == Inspection.machine_id
+    ).join(
+        User, User.user_id == Inspection.operator_id
+    )
 
     if inspection_no:
-        query = query.where(Inspection.inspection_no.ilike(f"%{inspection_no}%"))
+        query = query.where(
+            Inspection.inspection_no.like(f"%{inspection_no}%")
+        )
     if machine_code:
-        query = query.where(Machine.machine_code.ilike(f"%{machine_code}%"))
+        query = query.where(
+            Machine.machine_code.like(f"%{machine_code}%")
+        )
     if operator_id:
         query = query.where(Inspection.operator_id == operator_id)
     if status:
@@ -50,7 +59,9 @@ def search_inspections(
     if date_from:
         query = query.where(Inspection.started_at >= date_from)
     if date_to:
-        query = query.where(Inspection.started_at <= date_to + "T23:59:59")
+        query = query.where(
+            Inspection.started_at <= date_to + "T23:59:59"
+        )
 
     query = query.order_by(Inspection.started_at.desc()).limit(limit)
     rows = db.execute(query).all()
@@ -63,7 +74,9 @@ def get_timeline(
     db: Session = Depends(get_db),
     _=Depends(require_role("MANAGER", "ADMIN", "OPERATOR")),
 ):
-    inspection = db.scalar(select(Inspection).where(Inspection.id == inspection_id))
+    inspection = db.scalar(
+        select(Inspection).where(Inspection.inspection_id == inspection_id)
+    )
     if not inspection:
         raise HTTPException(status_code=404, detail="Inspection not found")
 
@@ -80,7 +93,9 @@ def get_timeline(
 
     return [
         {
-            "timestamp": log.created_at.isoformat() if hasattr(log.created_at, 'isoformat') else str(log.created_at),
+            "timestamp": log.created_at.isoformat()
+            if hasattr(log.created_at, "isoformat")
+            else str(log.created_at),
             "action": log.action,
             "user_name": None,
             "user_role": None,
@@ -98,17 +113,23 @@ def investigation_detail(
 ):
     inspection = db.scalar(
         select(Inspection)
-        .join(Machine, Machine.id == Inspection.machine_id)
-        .join(User, User.id == Inspection.operator_id)
-        .where(Inspection.id == inspection_id)
+        .join(Machine, Machine.machine_id == Inspection.machine_id)
+        .join(User, User.user_id == Inspection.operator_id)
+        .where(Inspection.inspection_id == inspection_id)
     )
     if not inspection:
         raise HTTPException(status_code=404, detail="Inspection not found")
 
-    machine = db.scalar(select(Machine).where(Machine.id == inspection.machine_id))
-    operator = db.scalar(select(User).where(User.id == inspection.operator_id))
+    machine = db.scalar(
+        select(Machine).where(Machine.machine_id == inspection.machine_id)
+    )
+    operator = db.scalar(
+        select(User).where(User.user_id == inspection.operator_id)
+    )
     responses = db.scalars(
-        select(InspectionResponse).where(InspectionResponse.inspection_id == inspection_id)
+        select(InspectionResponse).where(
+            InspectionResponse.inspection_id == inspection_id
+        )
     ).all()
     photos = db.scalars(
         select(Photo).where(Photo.inspection_id == inspection_id)
@@ -129,7 +150,9 @@ def investigation_detail(
 
     timeline = [
         {
-            "timestamp": log.created_at.isoformat() if hasattr(log.created_at, 'isoformat') else str(log.created_at),
+            "timestamp": log.created_at.isoformat()
+            if hasattr(log.created_at, "isoformat")
+            else str(log.created_at),
             "action": log.action,
             "user_name": None,
             "user_role": None,
@@ -140,17 +163,64 @@ def investigation_detail(
 
     return {
         "inspection": {
-            "id": inspection.id,
+            "id": inspection.inspection_id,
             "inspection_no": inspection.inspection_no,
             "status": inspection.status,
-            "started_at": inspection.started_at.isoformat() if hasattr(inspection.started_at, 'isoformat') else str(inspection.started_at),
-            "submitted_at": inspection.submitted_at.isoformat() if inspection.submitted_at and hasattr(inspection.submitted_at, 'isoformat') else str(inspection.submitted_at) if inspection.submitted_at else None,
-            "approved_at": inspection.approved_at.isoformat() if inspection.approved_at and hasattr(inspection.approved_at, 'isoformat') else str(inspection.approved_at) if inspection.approved_at else None,
+            "started_at": inspection.started_at.isoformat()
+            if hasattr(inspection.started_at, "isoformat")
+            else str(inspection.started_at),
+            "submitted_at": inspection.submitted_at.isoformat()
+            if inspection.submitted_at
+            and hasattr(inspection.submitted_at, "isoformat")
+            else str(inspection.submitted_at)
+            if inspection.submitted_at
+            else None,
+            "approved_at": inspection.approved_at.isoformat()
+            if inspection.approved_at
+            and hasattr(inspection.approved_at, "isoformat")
+            else str(inspection.approved_at)
+            if inspection.approved_at
+            else None,
         },
-        "machine": {"code": machine.machine_code, "name": machine.machine_name} if machine else None,
-        "operator": {"employee_id": operator.employee_id, "name": operator.full_name} if operator else None,
-        "responses": [{"id": r.id, "checklist_item_id": r.checklist_item_id, "result": r.result, "remarks": r.remarks} for r in responses],
-        "photos": [{"id": p.id, "file_name": p.file_name, "lan_path": p.lan_path, "uploaded_at": str(p.uploaded_at)} for p in photos],
-        "overrides": [{"id": o.id, "checklist_item_id": o.checklist_item_id, "original_result": o.original_result, "override_result": o.override_result, "reason": o.reason} for o in overrides],
+        "machine": {
+            "code": machine.machine_code,
+            "name": machine.machine_name,
+        }
+        if machine
+        else None,
+        "operator": {
+            "employee_id": operator.employee_id,
+            "name": operator.full_name,
+        }
+        if operator
+        else None,
+        "responses": [
+            {
+                "id": r.inspection_response_id,
+                "checklist_item_id": r.checklist_item_id,
+                "result": r.result,
+                "remarks": r.remarks,
+            }
+            for r in responses
+        ],
+        "photos": [
+            {
+                "id": p.photo_id,
+                "file_name": p.file_name,
+                "lan_path": p.lan_path,
+                "uploaded_at": str(p.uploaded_at),
+            }
+            for p in photos
+        ],
+        "overrides": [
+            {
+                "id": o.override_id,
+                "checklist_item_id": o.checklist_item_id,
+                "original_result": o.original_result,
+                "override_result": o.override_result,
+                "reason": o.reason,
+            }
+            for o in overrides
+        ],
         "timeline": timeline,
     }

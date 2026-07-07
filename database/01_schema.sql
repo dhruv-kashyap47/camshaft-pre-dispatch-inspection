@@ -158,8 +158,7 @@ CREATE TABLE audit_logs (
     old_value    VARCHAR2(4000) NULL,
     new_value    VARCHAR2(4000) NULL,
     details      VARCHAR2(4000) NULL,
-    created_at   TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(user_id)
+    created_at   TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL
 )
 PARTITION BY RANGE (created_at) INTERVAL (INTERVAL '1' MONTH)
 (
@@ -170,7 +169,6 @@ PARTITION BY RANGE (created_at) INTERVAL (INTERVAL '1' MONTH)
 -- GLOBAL INDEXES
 -- ============================================================================
 CREATE INDEX idx_users_role_id            ON users(role_id);
-CREATE INDEX idx_users_employee_id        ON users(employee_id);
 CREATE INDEX idx_machines_status          ON machines(status);
 CREATE INDEX idx_checklist_family_seq     ON checklist_items(machine_family, sequence_no);
 CREATE INDEX idx_checklist_active         ON checklist_items(is_active);
