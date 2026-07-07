@@ -26,6 +26,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
 import { Html5Qrcode } from "html5-qrcode";
 
 import api from "../api/client";
@@ -407,18 +408,19 @@ export function OperatorPage() {
                               {item.prompt}
                             </Typography>
                           </Stack>
-                          <Tooltip
-                            title={item.requires_photo ? "Photo required for this check" : "Photo optional"}
-                            arrow
-                          >
-                            <Chip
-                              variant="outlined"
-                              size="small"
-                              label={item.requires_photo ? "📷 Photo" : "Visual"}
-                              color={item.requires_photo ? "primary" : "default"}
-                              sx={{ flexShrink: 0, mt: 0.125 }}
-                            />
-                          </Tooltip>
+                            <Tooltip
+                              title={item.requires_photo ? "Photo required for this check" : "Photo optional"}
+                              arrow
+                            >
+                              <Chip
+                                variant="outlined"
+                                size="small"
+                                icon={item.requires_photo ? <PhotoCamera sx={{ fontSize: 14 }} /> : undefined}
+                                label={item.requires_photo ? "Photo" : "Visual"}
+                                color={item.requires_photo ? "primary" : "default"}
+                                sx={{ flexShrink: 0, mt: 0.125 }}
+                              />
+                            </Tooltip>
                         </Stack>
 
                         <Stack direction="row" spacing={1.25}>

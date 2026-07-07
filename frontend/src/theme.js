@@ -432,9 +432,79 @@ export const theme = createTheme({
         },
       },
     },
+    MuiBackdrop: {
+      styleOverrides: {
+        root: {
+          backgroundColor: "rgba(0,0,0,0.3)",
+          backdropFilter: "blur(2px)",
+        },
+      },
+    },
     MuiCircularProgress: {
       defaultProps: {
         thickness: 3.5,
+      },
+    },
+    MuiInputAdornment: {
+      styleOverrides: {
+        root: {
+          "& .MuiTypography-root": { fontSize: "0.875rem" },
+        },
+      },
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 10,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
+          border: "1px solid rgba(0,0,0,0.06)",
+        },
+        list: {
+          padding: "6px",
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          padding: "8px 12px",
+          marginBottom: "2px",
+          "&:last-child": { marginBottom: 0 },
+          "&:hover": {
+            backgroundColor: "rgba(0,70,173,0.06)",
+          },
+          "&.Mui-selected": {
+            backgroundColor: "rgba(0,70,173,0.1)",
+            "&:hover": { backgroundColor: "rgba(0,70,173,0.14)" },
+          },
+          "&:focus-visible": {
+            outline: `2px solid #0046AD`,
+            outlineOffset: "-2px",
+          },
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        icon: {
+          color: "rgba(0,0,0,0.35)",
+          "&:hover": { color: "rgba(0,0,0,0.6)" },
+        },
+      },
+    },
+    MuiSkeleton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+        },
       },
     },
   },

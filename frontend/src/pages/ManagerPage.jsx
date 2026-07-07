@@ -24,6 +24,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import RateReviewIcon from "@mui/icons-material/RateReview";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import InboxIcon from "@mui/icons-material/Inbox";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
 
 import api from "../api/client";
 
@@ -389,20 +390,23 @@ export function ManagerPage() {
                 </Box>
               )}
 
-              {detailInspection.photos?.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom sx={{ mb: 1 }}>
-                    Photos ({detailInspection.photos.length})
-                  </Typography>
-                  <Stack spacing={0.5}>
-                    {detailInspection.photos.map((p) => (
-                      <Typography key={p.id} variant="body2" color="text.secondary">
-                        📷 {p.file_name}
-                      </Typography>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
+                    {detailInspection.photos?.length > 0 && (
+                      <Box>
+                        <Typography variant="subtitle2" gutterBottom sx={{ mb: 1 }}>
+                          Photos ({detailInspection.photos.length})
+                        </Typography>
+                        <Stack spacing={0.75}>
+                          {detailInspection.photos.map((p) => (
+                            <Stack key={p.id} direction="row" spacing={0.75} alignItems="center">
+                              <PhotoCamera sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                              <Typography variant="body2" color="text.secondary">
+                                {p.file_name}
+                              </Typography>
+                            </Stack>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
 
               {!detailInspection.responses?.length &&
                !detailInspection.overrides?.length &&

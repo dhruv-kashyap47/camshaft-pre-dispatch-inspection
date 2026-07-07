@@ -21,6 +21,7 @@ import ClearIcon from "@mui/icons-material/Clear";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import FindInPageIcon from "@mui/icons-material/FindInPage";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
 
 import api from "../api/client";
 
@@ -503,11 +504,14 @@ export function InvestigationPage() {
                       <Typography variant="subtitle2" gutterBottom sx={{ mb: 1 }}>
                         Photos ({selectedInspection.photos.length})
                       </Typography>
-                      <Stack spacing={0.5}>
+                      <Stack spacing={0.75}>
                         {selectedInspection.photos.map((p) => (
-                          <Typography key={p.id} variant="body2" color="text.secondary">
-                            📷 {p.file_name}
-                          </Typography>
+                          <Stack key={p.id} direction="row" spacing={0.75} alignItems="center">
+                            <PhotoCamera sx={{ fontSize: 14, color: "text.secondary", flexShrink: 0 }} />
+                            <Typography variant="body2" color="text.secondary">
+                              {p.file_name}
+                            </Typography>
+                          </Stack>
                         ))}
                       </Stack>
                     </Box>

@@ -90,14 +90,7 @@ export function Shell({ children }) {
                 alt="Cummins logo"
                 sx={{ height: 28, width: "auto", display: "block" }}
               />
-              <Box
-                sx={{
-                  width: 1,
-                  height: 20,
-                  bgcolor: "divider",
-                  flexShrink: 0,
-                }}
-              />
+              <Divider orientation="vertical" flexItem sx={{ height: 20, alignSelf: "center" }} />
               <Typography
                 className="orbitron"
                 sx={{
@@ -174,15 +167,7 @@ export function Shell({ children }) {
 
             {user && (
               <>
-                <Box
-                  sx={{
-                    width: 1,
-                    height: 18,
-                    bgcolor: "divider",
-                    mx: 1,
-                    flexShrink: 0,
-                  }}
-                />
+                <Divider orientation="vertical" flexItem sx={{ height: 18, mx: 1 }} />
                 <Tooltip title={`${rs.label} · ${user.employeeId}`} arrow>
                   <Stack
                     direction="row"
@@ -316,7 +301,7 @@ export function Shell({ children }) {
                 alt="Cummins logo"
                 sx={{ height: 26, width: "auto" }}
               />
-              <Box sx={{ width: 1, height: 18, bgcolor: "divider" }} />
+              <Divider orientation="vertical" flexItem sx={{ height: 18 }} />
               <Typography
                 className="orbitron"
                 sx={{
