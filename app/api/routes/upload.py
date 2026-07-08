@@ -1,7 +1,7 @@
 import logging
 import os
 import uuid
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import select
@@ -23,6 +23,38 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp": ".webp",
 }
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+_STORAGE_ROOT_CACHE = None
+
+
+def _resolve_storage_root() -> PureWindowsPath | Path:
+    global _STORAGE_ROOT_CACHE
+
+    if _STORAGE_ROOT_CACHE is not None:
+        return _STORAGE_ROOT_CACHE
+
+    primary = PureWindowsPath(settings.lan_image_root)
+
+    try:
+        os.makedirs(str(primary), exist_ok=True)
+        logger.info("Using production storage: %s", primary)
+        _STORAGE_ROOT_CACHE = primary
+        return primary
+    except OSError as e:
+        logger.warning(
+            "Production share unavailable: %s\n"
+            "Falling back to local storage: %s\n"
+            "Reason: %s",
+            primary,
+            settings.local_image_root,
+            e,
+        )
+
+    fallback = Path(settings.local_image_root).resolve()
+    os.makedirs(str(fallback), exist_ok=True)
+    logger.info("Using local development storage: %s", fallback)
+    _STORAGE_ROOT_CACHE = fallback
+    return fallback
 
 
 @router.post("/photo/{inspection_id}")
@@ -51,9 +83,9 @@ async def upload_photo(
 
     ext = ALLOWED_CONTENT_TYPES[file.content_type]
     unique_name = f"{uuid.uuid4().hex}{ext}"
-    inspection_dir = (
-        PureWindowsPath(settings.lan_image_root) / inspection.inspection_no
-    )
+
+    storage_root = _resolve_storage_root()
+    inspection_dir = storage_root / inspection.inspection_no
 
     try:
         os.makedirs(str(inspection_dir), exist_ok=True)
@@ -61,7 +93,7 @@ async def upload_photo(
         with open(str(dest_path), "wb") as f:
             f.write(content)
     except OSError as e:
-        logger.error("Failed to save photo: %s", e)
+        logger.error("Failed to save photo to %s: %s", inspection_dir, e)
         raise HTTPException(
             status_code=500, detail="Failed to save photo to storage"
         )

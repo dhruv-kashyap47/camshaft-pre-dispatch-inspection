@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     allow_dev_sqlite_fallback: bool = Field(default=True, alias="ALLOW_DEV_SQLITE_FALLBACK")
     dev_sqlite_url: str = Field(default="sqlite:///./camtrace-dev.db", alias="DEV_SQLITE_URL")
     lan_image_root: str = Field(default=r"\\fileserver\camtrace\inspection_photos", alias="LAN_IMAGE_ROOT")
+    local_image_root: str = Field(default="./uploads/inspection_photos", alias="LOCAL_IMAGE_ROOT")
     cors_origins_str: str = Field(default="http://localhost:5173", alias="CORS_ORIGINS")
     default_manager_override_window_hours: int = Field(default=12, alias="DEFAULT_MANAGER_OVERRIDE_WINDOW_HOURS")
     report_timezone: str = Field(default="Asia/Kolkata", alias="REPORT_TIMEZONE")
