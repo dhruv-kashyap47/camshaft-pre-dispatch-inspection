@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Role, User
+from app.models import Role, UserAccess
 
 DBSession = Annotated[Session, Depends(get_db)]
 
@@ -15,7 +15,7 @@ DBSession = Annotated[Session, Depends(get_db)]
 def get_current_user(
     db: DBSession,
     authorization: Annotated[str | None, Header()] = None,
-) -> User:
+) -> UserAccess:
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,7 +52,7 @@ def get_current_user(
 
     try:
         user = db.scalar(
-            select(User).where(User.user_id == int(user_id))
+            select(UserAccess).where(UserAccess.useraccess_id == int(user_id))
         )
     except (ValueError, TypeError):
         raise HTTPException(
@@ -82,8 +82,9 @@ def get_current_user(
 
 def require_role(*allowed_roles: str):
     def dependency(
-        current_user: Annotated[User, Depends(get_current_user)], db: DBSession
-    ) -> User:
+        current_user: Annotated[UserAccess, Depends(get_current_user)],
+        db: DBSession,
+    ) -> UserAccess:
         role = db.scalar(
             select(Role).where(Role.role_id == current_user.role_id)
         )
@@ -95,3 +96,20 @@ def require_role(*allowed_roles: str):
         return current_user
 
     return dependency
+
+
+def require_operator_or_manager_mode(
+    current_user: Annotated[UserAccess, Depends(get_current_user)],
+    db: DBSession,
+) -> tuple[UserAccess, bool]:
+    role = db.scalar(select(Role).where(Role.role_id == current_user.role_id))
+    is_operator = role is not None and role.role_name == "OPERATOR"
+    is_manager = role is not None and role.role_name == "MANAGER"
+    if is_operator:
+        return current_user, True
+    if is_manager:
+        return current_user, False
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="This endpoint requires OPERATOR or MANAGER role",
+    )

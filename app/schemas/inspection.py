@@ -3,6 +3,13 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+class QrParseResult(BaseModel):
+    raw_qr: str
+    part_number: int
+    serial_number: int
+    vendor_code: str
+
+
 class AttendanceRequest(BaseModel):
     inspection_no: str = Field(min_length=1, max_length=40)
 
@@ -13,6 +20,36 @@ class QRScanRequest(BaseModel):
 
 class InspectionStartRequest(BaseModel):
     machine_code: str = Field(min_length=1, max_length=30)
+
+
+class ResumeInspectionRequest(BaseModel):
+    raw_qr: str = Field(min_length=1, max_length=200)
+
+
+class SaveAnswerRequest(BaseModel):
+    inspection_id: int = Field(gt=0)
+    checklist_item_id: int = Field(gt=0)
+    result: str = Field(pattern=r"^(OK|NOT_OK)$")
+    remarks: str | None = Field(default=None, max_length=500)
+
+
+class SaveRemarkRequest(BaseModel):
+    inspection_id: int = Field(gt=0)
+    checklist_item_id: int = Field(gt=0)
+    remarks: str | None = Field(default=None, max_length=500)
+
+
+class CompleteStepRequest(BaseModel):
+    inspection_id: int = Field(gt=0)
+    sequence_no: int = Field(gt=0)
+
+
+class EngineSubmitRequest(BaseModel):
+    inspection_id: int = Field(gt=0)
+
+
+class RestartInspectionRequest(BaseModel):
+    inspection_id: int = Field(gt=0)
 
 
 class ChecklistAnswer(BaseModel):

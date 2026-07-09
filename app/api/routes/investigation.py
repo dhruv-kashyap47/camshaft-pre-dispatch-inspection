@@ -5,8 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DBSession, get_db, require_role
-from app.models import AuditLog, Inspection, InspectionResponse, Machine, Override, Photo, User
-from app.schemas.report import InvestigationResult, InspectionTimelineEntry
+from app.models import AuditLog, CamName, Inspection, InspectionResponse, Override, Photo, UserAccess
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +15,10 @@ router = APIRouter()
 @router.get("/search", response_model=list[dict])
 def search_inspections(
     inspection_no: str | None = Query(default=None, max_length=40),
-    machine_code: str | None = Query(default=None, max_length=30),
+    cam_code: str | None = Query(default=None, max_length=30),
     operator_id: int | None = Query(default=None, ge=1),
     status: str | None = Query(
-        default=None, pattern=r"^(IN_PROGRESS|SUBMITTED|APPROVED|REJECTED)$"
+        default=None, pattern=r"^(NOT_STARTED|IN_PROGRESS|SUBMITTED|APPROVED|REJECTED)$"
     ),
     date_from: str | None = Query(default=None, description="YYYY-MM-DD"),
     date_to: str | None = Query(default=None, description="YYYY-MM-DD"),
@@ -34,24 +33,20 @@ def search_inspections(
         Inspection.started_at,
         Inspection.submitted_at,
         Inspection.approved_at,
-        Machine.machine_code,
-        Machine.machine_name,
-        User.employee_id,
-        User.full_name,
+        CamName.cam_code,
+        CamName.cam_name,
+        UserAccess.employee_id,
+        UserAccess.full_name,
     ).join(
-        Machine, Machine.machine_id == Inspection.machine_id
+        CamName, CamName.cam_name_id == Inspection.cam_name_id
     ).join(
-        User, User.user_id == Inspection.operator_id
+        UserAccess, UserAccess.useraccess_id == Inspection.operator_id
     )
 
     if inspection_no:
-        query = query.where(
-            Inspection.inspection_no.like(f"%{inspection_no}%")
-        )
-    if machine_code:
-        query = query.where(
-            Machine.machine_code.like(f"%{machine_code}%")
-        )
+        query = query.where(Inspection.inspection_no.like(f"%{inspection_no}%"))
+    if cam_code:
+        query = query.where(CamName.cam_code.like(f"%{cam_code}%"))
     if operator_id:
         query = query.where(Inspection.operator_id == operator_id)
     if status:
@@ -59,9 +54,7 @@ def search_inspections(
     if date_from:
         query = query.where(Inspection.started_at >= date_from)
     if date_to:
-        query = query.where(
-            Inspection.started_at <= date_to + "T23:59:59"
-        )
+        query = query.where(Inspection.started_at <= date_to + "T23:59:59")
 
     query = query.order_by(Inspection.started_at.desc()).limit(limit)
     rows = db.execute(query).all()
@@ -113,23 +106,17 @@ def investigation_detail(
 ):
     inspection = db.scalar(
         select(Inspection)
-        .join(Machine, Machine.machine_id == Inspection.machine_id)
-        .join(User, User.user_id == Inspection.operator_id)
+        .join(CamName, CamName.cam_name_id == Inspection.cam_name_id)
+        .join(UserAccess, UserAccess.useraccess_id == Inspection.operator_id)
         .where(Inspection.inspection_id == inspection_id)
     )
     if not inspection:
         raise HTTPException(status_code=404, detail="Inspection not found")
 
-    machine = db.scalar(
-        select(Machine).where(Machine.machine_id == inspection.machine_id)
-    )
-    operator = db.scalar(
-        select(User).where(User.user_id == inspection.operator_id)
-    )
+    cam = db.scalar(select(CamName).where(CamName.cam_name_id == inspection.cam_name_id))
+    operator = db.scalar(select(UserAccess).where(UserAccess.useraccess_id == inspection.operator_id))
     responses = db.scalars(
-        select(InspectionResponse).where(
-            InspectionResponse.inspection_id == inspection_id
-        )
+        select(InspectionResponse).where(InspectionResponse.inspection_id == inspection_id)
     ).all()
     photos = db.scalars(
         select(Photo).where(Photo.inspection_id == inspection_id)
@@ -170,30 +157,20 @@ def investigation_detail(
             if hasattr(inspection.started_at, "isoformat")
             else str(inspection.started_at),
             "submitted_at": inspection.submitted_at.isoformat()
-            if inspection.submitted_at
-            and hasattr(inspection.submitted_at, "isoformat")
-            else str(inspection.submitted_at)
-            if inspection.submitted_at
-            else None,
+            if inspection.submitted_at and hasattr(inspection.submitted_at, "isoformat")
+            else str(inspection.submitted_at) if inspection.submitted_at else None,
             "approved_at": inspection.approved_at.isoformat()
-            if inspection.approved_at
-            and hasattr(inspection.approved_at, "isoformat")
-            else str(inspection.approved_at)
-            if inspection.approved_at
-            else None,
+            if inspection.approved_at and hasattr(inspection.approved_at, "isoformat")
+            else str(inspection.approved_at) if inspection.approved_at else None,
         },
-        "machine": {
-            "code": machine.machine_code,
-            "name": machine.machine_name,
-        }
-        if machine
-        else None,
+        "cam": {
+            "code": cam.cam_code if cam else None,
+            "name": cam.cam_name if cam else None,
+        } if cam else None,
         "operator": {
-            "employee_id": operator.employee_id,
-            "name": operator.full_name,
-        }
-        if operator
-        else None,
+            "employee_id": operator.employee_id if operator else None,
+            "name": operator.full_name if operator else None,
+        } if operator else None,
         "responses": [
             {
                 "id": r.inspection_response_id,
@@ -207,8 +184,9 @@ def investigation_detail(
             {
                 "id": p.photo_id,
                 "file_name": p.file_name,
-                "lan_path": p.lan_path,
-                "uploaded_at": str(p.uploaded_at),
+                "content_type": p.content_type,
+                "file_size": p.file_size,
+                "created_at": str(p.created_at),
             }
             for p in photos
         ],

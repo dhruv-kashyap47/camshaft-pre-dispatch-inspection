@@ -28,6 +28,7 @@ import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useQrScanner } from "../hooks/useQrScanner";
 import ChecklistItemCard from "../components/ChecklistItemCard";
+import SummaryScreen from "../components/SummaryScreen";
 import api from "../api/client";
 
 const CHECKLIST_ITEMS = [
@@ -65,6 +66,7 @@ export function OperatorPage() {
   const [photos, setPhotos] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -183,21 +185,36 @@ export function OperatorPage() {
     [checklist, photos, photoRequiredCount]
   );
 
+  const notOkRemarksValid = useMemo(
+    () => checklist.filter((item) => answers[item.id] === "NOT_OK").every((item) => (remarks[item.id] || "").trim().length > 0),
+    [checklist, answers, remarks]
+  );
+
   const canSubmit = useMemo(
-    () => allAnswered && allPhotosUploaded,
-    [allAnswered, allPhotosUploaded]
+    () => allAnswered && allPhotosUploaded && notOkRemarksValid,
+    [allAnswered, allPhotosUploaded, notOkRemarksValid]
   );
 
   const isLastItem = currentIndex >= checklist.length - 1;
   const isFirstItem = currentIndex <= 0;
 
   const handleAnswer = useCallback((itemId, value) => {
-    setAnswers((prev) => ({ ...prev, [itemId]: value }));
-  }, []);
+    setAnswers((prev) => {
+      const next = { ...prev, [itemId]: value };
+      saveAnswer(itemId, value, remarks[itemId] || "");
+      return next;
+    });
+  }, [inspection, remarks]);
 
   const handleRemark = useCallback((itemId, value) => {
-    setRemarks((prev) => ({ ...prev, [itemId]: value }));
-  }, []);
+    setRemarks((prev) => {
+      const next = { ...prev, [itemId]: value };
+      if (answers[itemId]) {
+        saveAnswer(itemId, answers[itemId], value);
+      }
+      return next;
+    });
+  }, [inspection, answers]);
 
   const handlePhotoChange = useCallback((itemId, data) => {
     setPhotos((prev) => ({
@@ -208,12 +225,8 @@ export function OperatorPage() {
 
   const handleContinue = useCallback(() => {
     if (!currentItem) return;
-    if (isLastItem) {
-      submitInspection();
-    } else {
-      setCurrentIndex((prev) => prev + 1);
-    }
-  }, [currentItem, isLastItem]);
+    setCurrentIndex((prev) => prev + 1);
+  }, [currentItem]);
 
   const handleBack = useCallback(() => {
     if (!isFirstItem) {
@@ -223,22 +236,44 @@ export function OperatorPage() {
 
   async function startInspection() {
     if (!machineCode.trim()) {
-      setError("Please enter or scan a machine code");
+      setError("Please enter or scan a machine QR code");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post("/operator/start", {
-        machine_code: machineCode.trim(),
+      const response = await api.post("/engine/resume", {
+        raw_qr: machineCode.trim(),
       });
-      setInspection(response.data);
+      const inspData = response.data;
+      setInspection(inspData.inspection);
+
       setSubmitted(false);
-      setAnswers({});
-      setRemarks({});
-      setPhotos({});
       setCurrentIndex(0);
       setInitialized(false);
+
+      // Restore existing answers/photos from a resumed inspection
+      if (inspData.action === "resumed" && inspData.inspection?.responses?.length) {
+        const restoredAnswers = {};
+        const restoredRemarks = {};
+        const restoredPhotos = {};
+        for (const r of inspData.inspection.responses) {
+          restoredAnswers[r.checklist_item_id] = r.result;
+          if (r.remarks) restoredRemarks[r.checklist_item_id] = r.remarks;
+        }
+        for (const p of inspData.inspection.photos || []) {
+          if (p.checklist_item_id) {
+            restoredPhotos[p.checklist_item_id] = { status: "uploaded", photoId: p.id, fileName: p.file_name };
+          }
+        }
+        setAnswers(restoredAnswers);
+        setRemarks(restoredRemarks);
+        setPhotos(restoredPhotos);
+      } else {
+        setAnswers({});
+        setRemarks({});
+        setPhotos({});
+      }
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to start inspection");
     } finally {
@@ -246,25 +281,45 @@ export function OperatorPage() {
     }
   }
 
+  async function saveAnswer(itemId, result, remark) {
+    if (!inspection) return;
+    try {
+      await api.post("/engine/save-answer", {
+        inspection_id: inspection.id,
+        checklist_item_id: itemId,
+        result: result,
+        remarks: remark || "",
+      });
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to save answer");
+    }
+  }
+
+  function formatError(detail) {
+    if (!detail) return "Failed to submit inspection";
+    if (typeof detail === "string") return detail;
+    if (detail.errors && Array.isArray(detail.errors)) {
+      return detail.errors.map((e) => e.message || e.msg).join("; ");
+    }
+    if (detail.message) return detail.message;
+    if (detail.msg) return detail.msg;
+    try { return JSON.stringify(detail); } catch { return "Submission failed"; }
+  }
+
   async function submitInspection() {
     if (!inspection || !canSubmit || submitting) return;
     setSubmitting(true);
     setError(null);
-    const payload = {
-      inspection_id: inspection.id,
-      answers: checklist.map((item) => ({
-        checklist_item_id: item.id,
-        result: answers[item.id] || "OK",
-        remarks: remarks[item.id] || "",
-      })),
-    };
     try {
-      const response = await api.post("/operator/submit", payload);
+      const response = await api.post("/engine/submit", {
+        inspection_id: inspection.id,
+      });
       setInspection(response.data);
       setSubmitted(true);
+      setShowSummary(false);
       localStorage.removeItem(getDraftKey(inspection.id));
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to submit inspection");
+      setError(formatError(err.response?.data?.detail));
     } finally {
       setSubmitting(false);
     }
@@ -278,6 +333,7 @@ export function OperatorPage() {
     setPhotos({});
     setCurrentIndex(0);
     setSubmitted(false);
+    setShowSummary(false);
     setError(null);
     setInitialized(false);
     setSubmitting(false);
@@ -315,22 +371,22 @@ export function OperatorPage() {
               <Stack direction="row" spacing={1.5} alignItems="center">
                 <PrecisionManufacturingIcon color="primary" sx={{ fontSize: "1.5rem" }} />
                 <Box>
-                  <Typography variant="h6">Machine Setup</Typography>
+                  <Typography variant="h6">Inspection Setup</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Enter or scan the machine code to begin
+                    Enter or scan the QR code to begin
                   </Typography>
                 </Box>
               </Stack>
 
               <TextField
                 id="machine_code"
-                label="Machine Code"
-                placeholder="e.g. CAM-1001"
+                label="QR Code"
+                placeholder="e.g. P3979506;SB26006009;VTCJSR"
                 fullWidth
                 value={machineCode}
                 onChange={(e) => setMachineCode(e.target.value)}
                 disabled={loading}
-                inputProps={{ "aria-label": "Machine code", autoCapitalize: "characters" }}
+                inputProps={{ "aria-label": "QR code", autoCapitalize: "characters" }}
                 sx={{ "& .MuiOutlinedInput-root": { fontSize: "1.05rem" } }}
               />
 
@@ -426,155 +482,185 @@ export function OperatorPage() {
   }
 
   // ────────────────────────────────────
-  // Render: Active Inspection (one item at a time)
+  // Render: Active Inspection (one item at a time + summary)
   // ────────────────────────────────────
   return (
-    <Stack spacing={2.5} sx={{ animation: "fadeIn 0.35s ease-out" }}>
-      {/* Machine info + inspection header */}
-      <Card sx={{ borderRadius: 2, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.05)" }}>
-        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, "&:last-child": { pb: { xs: 1.5, sm: 2 } } }}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} spacing={1.25}>
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <PrecisionManufacturingIcon color="primary" sx={{ fontSize: "1.2rem" }} />
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                  {machineCode || "Machine"}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6875rem" }}>
-                  {inspection.inspection_no}
-                </Typography>
-              </Box>
-            </Stack>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-              <Chip size="small" icon={<CheckCircleIcon />} label={`${okCount} OK`} color="success" variant="outlined" />
-              {notOkCount > 0 && <Chip size="small" icon={<CancelIcon />} label={`${notOkCount} NOT OK`} color="error" variant="outlined" />}
-              <Chip size="small" icon={<PhotoCameraIcon />} label={`${photoUploadedCount}/${photoRequiredCount} photos`} color="primary" variant="outlined" />
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Progress section */}
-      <Box sx={{ animation: "fadeIn 0.4s ease-out" }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
-          <Typography variant="body2" fontWeight={600} color="text.secondary">
-            Inspection Progress
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight={700}
-            color={progressPct === 100 ? "success.main" : "primary.main"}
+    <Box sx={{ height: "calc(100vh - 100px)", display: "flex", flexDirection: "column", overflow: "hidden", animation: "fadeIn 0.35s ease-out" }}>
+      {showSummary ? (
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <SummaryScreen
+            checklistItems={checklist}
+            answers={checklist.map((item) => answers[item.id])}
+            remarks={checklist.map((item) => remarks[item.id])}
+            photos={checklist.map((item) => photos[item.id])}
+            inspectionNo={inspection?.inspection_no}
+            onSubmit={submitInspection}
+            submitting={submitting}
+            submitDisabled={!canSubmit}
+          />
+          <Button
+            variant="text"
+            color="inherit"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setShowSummary(false)}
+            disabled={submitting}
+            sx={{ alignSelf: "flex-start", mt: 1, fontSize: "0.8125rem" }}
           >
-            {answeredCount} / {checklist.length} Complete
+            Back to Checklist
+          </Button>
+          {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mt: 1 }}>{error}</Alert>}
+        </Box>
+      ) : (
+        <Stack spacing={2.5} sx={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {/* Machine info + inspection header */}
+          <Card sx={{ borderRadius: 2, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", border: "1px solid rgba(0,0,0,0.05)", flexShrink: 0 }}>
+            <CardContent sx={{ p: { xs: 1.5, sm: 2 }, "&:last-child": { pb: { xs: 1.5, sm: 2 } } }}>
+              <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} spacing={1.25}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <PrecisionManufacturingIcon color="primary" sx={{ fontSize: "1.2rem" }} />
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                      {machineCode || "Machine"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6875rem" }}>
+                      {inspection.inspection_no}
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                  <Chip size="small" icon={<CheckCircleIcon />} label={`${okCount} OK`} color="success" variant="outlined" />
+                  {notOkCount > 0 && <Chip size="small" icon={<CancelIcon />} label={`${notOkCount} NOT OK`} color="error" variant="outlined" />}
+                  <Chip size="small" icon={<PhotoCameraIcon />} label={`${photoUploadedCount}/${photoRequiredCount} photos`} color="primary" variant="outlined" />
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {/* Progress section */}
+          <Box sx={{ flexShrink: 0, animation: "fadeIn 0.4s ease-out" }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
+              <Typography variant="body2" fontWeight={600} color="text.secondary">
+                Inspection Progress
+              </Typography>
+              <Typography
+                variant="body2"
+                fontWeight={700}
+                color={progressPct === 100 ? "success.main" : "primary.main"}
+              >
+                {answeredCount} / {checklist.length} Complete
+              </Typography>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={progressPct}
+              color={progressPct === 100 ? "success" : "primary"}
+              aria-label={`Checklist completion: ${progressPct}%`}
+              sx={{ height: 8, borderRadius: 4, mb: 0.75 }}
+            />
+            {photoRequiredCount > 0 && (
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6875rem" }}>
+                  Photo completion
+                </Typography>
+                <Typography
+                  variant="caption"
+                  fontWeight={600}
+                  color={photoProgressPct === 100 ? "success.main" : "text.secondary"}
+                  sx={{ fontSize: "0.6875rem" }}
+                >
+                  {photoUploadedCount} / {photoRequiredCount} uploaded
+                </Typography>
+              </Stack>
+            )}
+            {photoRequiredCount > 0 && (
+              <LinearProgress
+                variant="determinate"
+                value={photoProgressPct}
+                color={photoProgressPct === 100 ? "success" : "info"}
+                aria-label={`Photo completion: ${photoProgressPct}%`}
+                sx={{ height: 5, borderRadius: 4, mt: 0.5 }}
+              />
+            )}
+          </Box>
+
+          {/* Alerts */}
+          <Box aria-live="polite" aria-atomic="true" sx={{ flexShrink: 0 }}>
+            {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+          </Box>
+
+          {/* Current checklist card - scrollable if needed */}
+          <Box sx={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+            {currentItem && (
+              <Box key={currentItem.id} sx={{ height: "100%", overflow: "hidden", animation: "fadeIn 0.3s ease-out" }}>
+                <ChecklistItemCard
+                  item={currentItem}
+                  index={currentIndex}
+                  total={checklist.length}
+                  answer={answers[currentItem.id]}
+                  remark={remarks[currentItem.id]}
+                  photo={photos[currentItem.id]}
+                  inspectionId={inspection?.id}
+                  onAnswer={handleAnswer}
+                  onRemark={handleRemark}
+                  onPhotoChange={handlePhotoChange}
+                  submitting={submitting}
+                />
+              </Box>
+            )}
+          </Box>
+
+          {/* Navigation */}
+          <Stack direction="row" spacing={2} justifyContent="space-between" sx={{ pt: 0.5, flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={handleBack}
+              disabled={isFirstItem || submitting}
+              sx={{ minHeight: 48, minWidth: 120, fontSize: "0.875rem" }}
+              aria-label="Previous checklist item"
+            >
+              Back
+            </Button>
+
+            {isLastItem ? (
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                endIcon={<SendIcon />}
+                onClick={() => setShowSummary(true)}
+                disabled={!canSubmit || submitting}
+                sx={{
+                  minHeight: 48,
+                  minWidth: 160,
+                  fontSize: "0.9375rem",
+                  fontWeight: 700,
+                  animation: canSubmit ? "pulse 2s ease-in-out infinite" : "none",
+                }}
+                aria-label="Review and submit inspection"
+              >
+                Review & Submit
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                endIcon={<ArrowForwardIcon />}
+                onClick={handleContinue}
+                disabled={submitting}
+                sx={{ minHeight: 48, minWidth: 140, fontSize: "0.875rem" }}
+                aria-label="Continue to next item"
+              >
+                Continue
+              </Button>
+            )}
+          </Stack>
+
+          {/* Item position indicator */}
+          <Typography variant="caption" textAlign="center" color="text.disabled" sx={{ fontSize: "0.6875rem", pb: 1, flexShrink: 0 }}>
+            Item {currentIndex + 1} of {checklist.length}
           </Typography>
         </Stack>
-        <LinearProgress
-          variant="determinate"
-          value={progressPct}
-          color={progressPct === 100 ? "success" : "primary"}
-          aria-label={`Checklist completion: ${progressPct}%`}
-          sx={{ height: 8, borderRadius: 4, mb: 0.75 }}
-        />
-        {photoRequiredCount > 0 && (
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.6875rem" }}>
-              Photo completion
-            </Typography>
-            <Typography
-              variant="caption"
-              fontWeight={600}
-              color={photoProgressPct === 100 ? "success.main" : "text.secondary"}
-              sx={{ fontSize: "0.6875rem" }}
-            >
-              {photoUploadedCount} / {photoRequiredCount} uploaded
-            </Typography>
-          </Stack>
-        )}
-        {photoRequiredCount > 0 && (
-          <LinearProgress
-            variant="determinate"
-            value={photoProgressPct}
-            color={photoProgressPct === 100 ? "success" : "info"}
-            aria-label={`Photo completion: ${photoProgressPct}%`}
-            sx={{ height: 5, borderRadius: 4, mt: 0.5 }}
-          />
-        )}
-      </Box>
-
-      {/* Alerts */}
-      <Box aria-live="polite" aria-atomic="true">
-        {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-      </Box>
-
-      {/* Current checklist card */}
-      {currentItem && (
-        <Box key={currentItem.id} sx={{ animation: "fadeIn 0.3s ease-out" }}>
-          <ChecklistItemCard
-            item={currentItem}
-            index={currentIndex}
-            total={checklist.length}
-            answer={answers[currentItem.id]}
-            remark={remarks[currentItem.id]}
-            photo={photos[currentItem.id]}
-            inspectionId={inspection?.id}
-            onAnswer={handleAnswer}
-            onRemark={handleRemark}
-            onPhotoChange={handlePhotoChange}
-            submitting={submitting}
-          />
-        </Box>
       )}
-
-      {/* Navigation */}
-      <Stack direction="row" spacing={2} justifyContent="space-between" sx={{ pt: 0.5 }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={handleBack}
-          disabled={isFirstItem || submitting}
-          sx={{ minHeight: 48, minWidth: 120, fontSize: "0.875rem" }}
-          aria-label="Previous checklist item"
-        >
-          Back
-        </Button>
-
-        {isLastItem ? (
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            endIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <SendIcon />}
-            onClick={submitInspection}
-            disabled={!canSubmit || submitting}
-            sx={{
-              minHeight: 48,
-              minWidth: 160,
-              fontSize: "0.9375rem",
-              fontWeight: 700,
-              animation: canSubmit ? "pulse 2s ease-in-out infinite" : "none",
-            }}
-            aria-label="Submit inspection"
-          >
-            {submitting ? "Submitting…" : "Submit Inspection"}
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            endIcon={<ArrowForwardIcon />}
-            onClick={handleContinue}
-            disabled={submitting}
-            sx={{ minHeight: 48, minWidth: 140, fontSize: "0.875rem" }}
-            aria-label="Continue to next item"
-          >
-            Continue
-          </Button>
-        )}
-      </Stack>
-
-      {/* Item position indicator */}
-      <Typography variant="caption" textAlign="center" color="text.disabled" sx={{ fontSize: "0.6875rem", pb: 1 }}>
-        Item {currentIndex + 1} of {checklist.length}
-      </Typography>
 
       {/* QR Scanner Dialog */}
       <Dialog
@@ -585,7 +671,7 @@ export function OperatorPage() {
         aria-labelledby="qr-dialog-title"
         disableRestoreFocus
       >
-        <DialogTitle id="qr-dialog-title">Scan Machine QR Code</DialogTitle>
+        <DialogTitle id="qr-dialog-title">Scan QR Code</DialogTitle>
         <DialogContent>
           {qrError && (
             <Alert severity="warning" sx={{ mb: 2 }}>
@@ -660,6 +746,6 @@ export function OperatorPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+    </Box>
   );
 }

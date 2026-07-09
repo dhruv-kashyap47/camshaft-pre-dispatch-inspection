@@ -16,6 +16,8 @@ import {
   Typography,
   Divider,
   Tooltip,
+  Chip,
+  Switch,
 } from "@mui/material";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -26,19 +28,25 @@ import SearchIcon from "@mui/icons-material/Search";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
 import CloseIcon from "@mui/icons-material/Close";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 
 import { useAuth } from "../modules/auth/AuthContext";
+import api from "../api/client";
+import OfflineBanner from "./OfflineBanner";
 
 const navByRole = {
   OPERATOR: [
     { label: "Inspections", to: "/operator", icon: <FactCheckIcon fontSize="small" /> },
   ],
   MANAGER: [
+    { label: "Dashboard", to: "/manager/dashboard", icon: <DashboardIcon fontSize="small" /> },
     { label: "Review", to: "/manager", icon: <RateReviewIcon fontSize="small" /> },
+    { label: "Checklists", to: "/manager/checklists", icon: <FactCheckIcon fontSize="small" /> },
     { label: "Reports", to: "/reports", icon: <BarChartIcon fontSize="small" /> },
     { label: "Investigate", to: "/investigation", icon: <SearchIcon fontSize="small" /> },
   ],
   ADMIN: [
+    { label: "Dashboard", to: "/admin/dashboard", icon: <DashboardIcon fontSize="small" /> },
     { label: "Admin", to: "/admin", icon: <AdminPanelSettingsIcon fontSize="small" /> },
     { label: "Reports", to: "/reports", icon: <BarChartIcon fontSize="small" /> },
     { label: "Investigate", to: "/investigation", icon: <SearchIcon fontSize="small" /> },
@@ -52,16 +60,25 @@ const roleStyle = {
 };
 
 export function Shell({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, activeMode, setActiveMode, isOperatorMode } = useAuth();
   const location = useLocation();
-  const nav = user ? navByRole[user.role] || [] : [];
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const isManager = user?.role === "MANAGER";
+
+  const baseNav = user ? navByRole[user.role] || [] : [];
+  const operatorNav = { label: "Inspections", to: "/operator", icon: <FactCheckIcon fontSize="small" /> };
+
+  const nav = isOperatorMode
+    ? [...baseNav, operatorNav]
+    : baseNav;
 
   const isActive = (path) => location.pathname === path;
   const rs = user ? roleStyle[user.role] || roleStyle.OPERATOR : roleStyle.OPERATOR;
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <OfflineBanner />
       <AppBar position="sticky" color="inherit" sx={{ zIndex: 1201 }}>
         <Toolbar
           sx={{
@@ -167,7 +184,74 @@ export function Shell({ children }) {
 
             {user && (
               <>
-                <Divider orientation="vertical" flexItem sx={{ height: 18, mx: 1 }} />
+                {isManager && (
+                  <>
+                    <Tooltip title={isOperatorMode ? "Switch to Manager Mode" : "Switch to Operator Mode"} arrow>
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        alignItems="center"
+                        onClick={async () => {
+                          const newMode = isOperatorMode ? "MANAGER_MODE" : "OPERATOR_MODE";
+                          setActiveMode(newMode);
+                          try {
+                            await api.post("/manager/mode-switch", { mode: newMode });
+                          } catch {}
+                        }}
+                        sx={{
+                          cursor: "pointer",
+                          px: 1,
+                          py: 0.375,
+                          borderRadius: 2,
+                          "&:hover": { bgcolor: "rgba(0,0,0,0.04)" },
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Switch to ${isOperatorMode ? "Manager" : "Operator"} mode`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            const newMode = isOperatorMode ? "MANAGER_MODE" : "OPERATOR_MODE";
+                            setActiveMode(newMode);
+                            api.post("/manager/mode-switch", { mode: newMode }).catch(() => {});
+                          }
+                        }}
+                      >
+                        <Switch
+                          size="small"
+                          checked={isOperatorMode}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => {
+                            const newMode = isOperatorMode ? "MANAGER_MODE" : "OPERATOR_MODE";
+                            setActiveMode(newMode);
+                            api.post("/manager/mode-switch", { mode: newMode }).catch(() => {});
+                          }}
+                          inputProps={{ "aria-label": "Operator mode toggle" }}
+                        />
+                        <Typography
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: "0.6875rem",
+                            color: isOperatorMode ? "success.main" : "text.secondary",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {isOperatorMode ? "Operator" : "Manager"}
+                        </Typography>
+                      </Stack>
+                    </Tooltip>
+                    {isOperatorMode && (
+                      <Chip
+                        size="small"
+                        label="Op Mode"
+                        color="success"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: "0.6rem", fontWeight: 700 }}
+                      />
+                    )}
+                  </>
+                )}
+                <Divider orientation="vertical" flexItem sx={{ height: 18, mx: 0.75 }} />
                 <Tooltip title={`${rs.label} · ${user.employeeId}`} arrow>
                   <Stack
                     direction="row"
@@ -364,6 +448,9 @@ export function Shell({ children }) {
                   {rs.label}
                 </Typography>
               </Stack>
+              {isOperatorMode && (
+                <Chip size="small" label="Operator Mode" color="success" variant="outlined" sx={{ ml: "auto", height: 20, fontSize: "0.6rem" }} />
+              )}
             </Stack>
           )}
 
@@ -405,6 +492,48 @@ export function Shell({ children }) {
               </ListItem>
             ))}
           </List>
+
+          {isManager && (
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                onClick={() => {
+                  const newMode = isOperatorMode ? "MANAGER_MODE" : "OPERATOR_MODE";
+                  setActiveMode(newMode);
+                  api.post("/manager/mode-switch", { mode: newMode }).catch(() => {});
+                }}
+                sx={{ cursor: "pointer", px: 1, py: 0.75, borderRadius: 2, "&:hover": { bgcolor: "grey.50" } }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Switch to ${isOperatorMode ? "Manager" : "Operator"} mode`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    const newMode = isOperatorMode ? "MANAGER_MODE" : "OPERATOR_MODE";
+                    setActiveMode(newMode);
+                    api.post("/manager/mode-switch", { mode: newMode }).catch(() => {});
+                  }
+                }}
+              >
+                <Typography variant="body2" fontWeight={500} color="text.secondary">
+                  {isOperatorMode ? "Operator Mode" : "Manager Mode"}
+                </Typography>
+                <Switch
+                  size="small"
+                  checked={isOperatorMode}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => {
+                    const newMode = isOperatorMode ? "MANAGER_MODE" : "OPERATOR_MODE";
+                    setActiveMode(newMode);
+                    api.post("/manager/mode-switch", { mode: newMode }).catch(() => {});
+                  }}
+                  inputProps={{ "aria-label": "Operator mode toggle" }}
+                />
+              </Stack>
+            </Box>
+          )}
 
           <Divider sx={{ mx: 2, mb: 0.5 }} />
 

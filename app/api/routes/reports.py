@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import DBSession, get_db, require_role
+from app.schemas.common import MessageResponse
 from app.services.reports import audit_trail_report, daily_inspection_summary, inspection_status_report, machine_summary
 
 router = APIRouter()
@@ -31,4 +32,9 @@ def machine_report(db: Session = Depends(get_db), _=Depends(require_role("MANAGE
 @router.get("/audit-trail")
 def audit_trail(db: Session = Depends(get_db), _=Depends(require_role("ADMIN"))):
     return audit_trail_report(db)
+
+
+@router.get("/export", response_model=MessageResponse)
+def export(db: DBSession, _=Depends(require_role("MANAGER", "ADMIN"))):
+    return MessageResponse(message="Export endpoint ready")
 

@@ -4,55 +4,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
 from app.api.deps import DBSession, require_role
-from app.models import Inspection, InspectionResponse, Photo
+from app.models import Inspection, InspectionResponse, Photo, UserAccess
 from app.schemas.common import MessageResponse
 from app.schemas.inspection import (
-    AttendanceRequest,
     ChecklistItemResponse,
-    InspectionStartRequest,
     InspectionSummary,
     PhotoMetadataRequest,
     QRScanRequest,
-    SubmitInspectionRequest,
 )
 from app.services.audit import write_audit_log
-from app.services.inspection import (
-    checklist_for_machine,
-    get_machine_by_qr,
-    mark_attendance,
-    save_photo_metadata,
-    start_inspection,
-    submit_inspection,
-)
+from app.services.inspection import checklist_for_machine, save_photo_metadata
 
 router = APIRouter()
-
-
-@router.post("/attendance", response_model=InspectionSummary)
-def attendance(
-    payload: AttendanceRequest,
-    db: DBSession,
-    user=Depends(require_role("OPERATOR")),
-):
-    return mark_attendance(db, payload.inspection_no, user)
-
-
-@router.post("/scan")
-def scan_machine(
-    payload: QRScanRequest,
-    db: DBSession,
-    user=Depends(require_role("OPERATOR")),
-):
-    machine = get_machine_by_qr(db, payload.qr_code)
-    write_audit_log(
-        db, "QR_SCAN", "MACHINE", machine.machine_code, user.user_id
-    )
-    db.commit()
-    return {
-        "machine_code": machine.machine_code,
-        "machine_name": machine.machine_name,
-        "status": machine.status,
-    }
 
 
 @router.get("/checklist", response_model=list[ChecklistItemResponse])
@@ -60,15 +23,6 @@ def get_checklist(
     db: DBSession, user=Depends(require_role("OPERATOR"))
 ):
     return checklist_for_machine(db)
-
-
-@router.post("/start", response_model=InspectionSummary)
-def start(
-    payload: InspectionStartRequest,
-    db: DBSession,
-    user=Depends(require_role("OPERATOR")),
-):
-    return start_inspection(db, payload.machine_code, user)
 
 
 @router.post("/photo")
@@ -80,15 +34,6 @@ def register_photo(
     return save_photo_metadata(
         db, payload.inspection_id, payload.checklist_item_id, payload.file_name, user
     )
-
-
-@router.post("/submit", response_model=InspectionSummary)
-def submit(
-    payload: SubmitInspectionRequest,
-    db: DBSession,
-    user=Depends(require_role("OPERATOR")),
-):
-    return submit_inspection(db, payload.inspection_id, payload.answers, user)
 
 
 @router.get("/inspections/{inspection_id}", response_model=InspectionSummary)
@@ -146,8 +91,9 @@ def get_inspection_detail(
             {
                 "id": p.photo_id,
                 "file_name": p.file_name,
-                "lan_path": p.lan_path,
-                "uploaded_at": str(p.uploaded_at),
+                "content_type": p.content_type,
+                "file_size": p.file_size,
+                "created_at": str(p.created_at),
             }
             for p in photos
         ],
@@ -159,7 +105,7 @@ def logout(
     db: DBSession, user=Depends(require_role("OPERATOR"))
 ):
     write_audit_log(
-        db, "LOGOUT", "USER", str(user.user_id), user.user_id
+        db, "LOGOUT", "USER", str(user.useraccess_id), user.useraccess_id
     )
     db.commit()
     return MessageResponse(message="Logged out successfully")

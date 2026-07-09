@@ -27,4 +27,5 @@ class AuditLogResponse(BaseModel):
     old_value: str | None = None
     new_value: str | None = None
     details: str | None
+    is_read: bool = False
     created_at: datetime

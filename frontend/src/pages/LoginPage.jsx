@@ -5,28 +5,28 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  MenuItem,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 
 import { useAuth } from "../modules/auth/AuthContext";
 
 export function LoginPage() {
-  const { register, handleSubmit, control, formState: { errors } } = useForm({
-    defaultValues: { employee_id: "", password: "", role: "OPERATOR" },
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: { employee_id: "", password: "" },
   });
   const { login, error, loading, setError } = useAuth();
   const navigate = useNavigate();
 
   async function onSubmit(values) {
     try {
-      await login(values);
-      const route = values.role === "ADMIN" ? "/admin" : `/${values.role.toLowerCase()}`;
+      const data = await login(values);
+      const role = data.role;
+      const route = role === "ADMIN" ? "/admin" : `/${role.toLowerCase()}`;
       navigate(route);
     } catch {
       // error is set in AuthContext
@@ -150,27 +150,6 @@ export function LoginPage() {
                     : undefined
                 }
               />
-              <Controller
-                name="role"
-                control={control}
-                defaultValue="OPERATOR"
-                rules={{ required: true }}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    id="role"
-                    select
-                    label="Role"
-                    fullWidth
-                    disabled={loading}
-                  >
-                    <MenuItem value="OPERATOR">Operator</MenuItem>
-                    <MenuItem value="MANAGER">Manager</MenuItem>
-                    <MenuItem value="ADMIN">IT / Admin</MenuItem>
-                  </TextField>
-                )}
-              />
-
               <Button
                 type="submit"
                 variant="contained"

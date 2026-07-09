@@ -7,18 +7,17 @@ from app.db.base import Base
 
 
 class Role(Base):
-    __tablename__ = "roles"
-    __table_args__ = (
-        Index("uq_roles_name", "role_name", unique=True),
-    )
+    __tablename__ = "tcl_cam_role"
 
     role_id: Mapped[int] = mapped_column(primary_key=True)
     role_name: Mapped[str] = mapped_column(String(30), nullable=False)
     description: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    users = relationship("User", back_populates="role")
+    users = relationship("UserAccess", back_populates="role")

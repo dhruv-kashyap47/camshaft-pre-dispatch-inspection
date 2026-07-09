@@ -16,7 +16,7 @@ def write_audit_log(
     new_value: str | None = None,
 ) -> None:
     row = AuditLog(
-        user_id=user_id,
+        useraccess_id=user_id,
         action=action,
         entity_name=entity_name,
         entity_id=entity_id,

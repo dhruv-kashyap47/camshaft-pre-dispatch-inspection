@@ -1,18 +1,21 @@
 from app.models.audit import AuditLog
-from app.models.checklist import ChecklistItem
+from app.models.checklist import ChecklistHeader, ChecklistItem
 from app.models.inspection import Inspection, InspectionResponse, Override, Photo
-from app.models.machine import Machine
+from app.models.machine import CamName
+from app.models.qr_data import QrData
 from app.models.role import Role
-from app.models.user import User
+from app.models.user import UserAccess
 
 __all__ = [
     "AuditLog",
+    "CamName",
+    "ChecklistHeader",
     "ChecklistItem",
     "Inspection",
     "InspectionResponse",
-    "Machine",
     "Override",
     "Photo",
+    "QrData",
     "Role",
-    "User",
+    "UserAccess",
 ]

@@ -1,34 +1,36 @@
--- ============================================================================
--- CamTrace Production Views for Oracle 19c
--- ============================================================================
+-- =============================================================================
+-- CamTrace Production Views for Oracle 19c — V2 TCL Naming
+-- =============================================================================
 
--- VW_INSPECTION_SUMMARY: Complete inspection overview for reporting
-CREATE OR REPLACE VIEW vw_inspection_summary AS
+-- VW_CAM_INSPECTION_SUMMARY: Complete inspection overview for reporting
+CREATE OR REPLACE VIEW vw_cam_inspection_summary AS
 SELECT
     i.inspection_id,
     i.inspection_no,
     i.status,
+    i.current_step,
+    i.completion_pct,
     i.attendance_marked_at,
     i.started_at,
     i.submitted_at,
     i.approved_at,
     i.approval_note,
-    m.machine_id,
-    m.machine_code,
-    m.machine_name,
-    u.user_id AS operator_user_id,
+    n.cam_name_id,
+    n.cam_code,
+    n.cam_name,
+    u.useraccess_id AS operator_user_id,
     u.employee_id AS operator_employee_id,
     u.full_name AS operator_name,
     r.role_name AS operator_role,
     EXTRACT(HOUR FROM i.started_at) AS shift_hour,
     TRUNC(i.started_at) AS inspection_date
-FROM inspections i
-JOIN machines m ON m.machine_id = i.machine_id
-JOIN users u ON u.user_id = i.operator_id
-JOIN roles r ON r.role_id = u.role_id;
+FROM tcl_cam_inspection i
+JOIN tcl_cam_name n ON n.cam_name_id = i.cam_name_id
+JOIN tcl_cam_useraccess u ON u.useraccess_id = i.operator_id
+JOIN tcl_cam_role r ON r.role_id = u.role_id;
 
--- VW_AUDIT_TRAIL: Complete audit trail with user details
-CREATE OR REPLACE VIEW vw_audit_trail AS
+-- VW_CAM_AUDIT_TRAIL: Complete audit trail with user details
+CREATE OR REPLACE VIEW vw_cam_audit_trail AS
 SELECT
     a.audit_log_id,
     a.action,
@@ -41,29 +43,29 @@ SELECT
     u.employee_id,
     u.full_name,
     r.role_name
-FROM audit_logs a
-LEFT JOIN users u ON u.user_id = a.user_id
-LEFT JOIN roles r ON r.role_id = u.role_id;
+FROM tcl_cam_audit_log a
+LEFT JOIN tcl_cam_useraccess u ON u.useraccess_id = a.useraccess_id
+LEFT JOIN tcl_cam_role r ON r.role_id = u.role_id;
 
--- VW_DAILY_INSPECTION_SUMMARY: Daily production summary
-CREATE OR REPLACE VIEW vw_daily_inspection_summary AS
+-- VW_CAM_DAILY_INSPECTION_SUMMARY: Daily production summary
+CREATE OR REPLACE VIEW vw_cam_daily_inspection_summary AS
 SELECT
     TRUNC(i.started_at) AS inspection_date,
-    m.machine_code,
-    m.machine_name,
+    n.cam_code,
+    n.cam_name,
     COUNT(*) AS total_inspections,
     SUM(CASE WHEN i.status = 'APPROVED' THEN 1 ELSE 0 END) AS approved,
     SUM(CASE WHEN i.status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
     SUM(CASE WHEN i.status = 'SUBMITTED' THEN 1 ELSE 0 END) AS pending_review,
     SUM(CASE WHEN i.status = 'IN_PROGRESS' THEN 1 ELSE 0 END) AS in_progress
-FROM inspections i
-JOIN machines m ON m.machine_id = i.machine_id
-GROUP BY TRUNC(i.started_at), m.machine_code, m.machine_name;
+FROM tcl_cam_inspection i
+JOIN tcl_cam_name n ON n.cam_name_id = i.cam_name_id
+GROUP BY TRUNC(i.started_at), n.cam_code, n.cam_name;
 
--- VW_OPERATOR_PERFORMANCE: Operator productivity metrics
-CREATE OR REPLACE VIEW vw_operator_performance AS
+-- VW_CAM_OPERATOR_PERFORMANCE: Operator productivity metrics
+CREATE OR REPLACE VIEW vw_cam_operator_performance AS
 SELECT
-    u.user_id,
+    u.useraccess_id,
     u.employee_id,
     u.full_name,
     COUNT(i.inspection_id) AS total_inspections,
@@ -71,28 +73,28 @@ SELECT
     ROUND(AVG(EXTRACT(DAY FROM (i.submitted_at - i.started_at)) * 24 * 60 +
               EXTRACT(HOUR FROM (i.submitted_at - i.started_at)) * 60 +
               EXTRACT(MINUTE FROM (i.submitted_at - i.started_at))), 2) AS avg_processing_minutes
-FROM users u
-LEFT JOIN inspections i ON i.operator_id = u.user_id
-WHERE EXISTS (SELECT 1 FROM roles r WHERE r.role_id = u.role_id AND r.role_name = 'OPERATOR')
-GROUP BY u.user_id, u.employee_id, u.full_name;
+FROM tcl_cam_useraccess u
+LEFT JOIN tcl_cam_inspection i ON i.operator_id = u.useraccess_id
+WHERE EXISTS (SELECT 1 FROM tcl_cam_role r WHERE r.role_id = u.role_id AND r.role_name = 'OPERATOR')
+GROUP BY u.useraccess_id, u.employee_id, u.full_name;
 
--- VW_MACHINE_SUMMARY: Machine inspection history
-CREATE OR REPLACE VIEW vw_machine_summary AS
+-- VW_CAM_MACHINE_SUMMARY: Machine inspection history
+CREATE OR REPLACE VIEW vw_cam_machine_summary AS
 SELECT
-    m.machine_id,
-    m.machine_code,
-    m.machine_name,
-    m.status AS machine_status,
+    n.cam_name_id,
+    n.cam_code,
+    n.cam_name,
+    n.status AS machine_status,
     COUNT(i.inspection_id) AS total_inspections,
     MAX(i.started_at) AS last_inspected_at,
     SUM(CASE WHEN i.status = 'APPROVED' THEN 1 ELSE 0 END) AS approved_count,
     SUM(CASE WHEN i.status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected_count
-FROM machines m
-LEFT JOIN inspections i ON i.machine_id = m.machine_id
-GROUP BY m.machine_id, m.machine_code, m.machine_name, m.status;
+FROM tcl_cam_name n
+LEFT JOIN tcl_cam_inspection i ON i.cam_name_id = n.cam_name_id
+GROUP BY n.cam_name_id, n.cam_code, n.cam_name, n.status;
 
--- VW_SHIFT_SUMMARY: Summary grouped by shift
-CREATE OR REPLACE VIEW vw_shift_summary AS
+-- VW_CAM_SHIFT_SUMMARY: Summary grouped by shift
+CREATE OR REPLACE VIEW vw_cam_shift_summary AS
 SELECT
     TRUNC(i.started_at) AS inspection_date,
     CASE
@@ -103,7 +105,7 @@ SELECT
     COUNT(*) AS total_inspections,
     SUM(CASE WHEN i.status = 'APPROVED' THEN 1 ELSE 0 END) AS approved,
     SUM(CASE WHEN i.status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected
-FROM inspections i
+FROM tcl_cam_inspection i
 GROUP BY TRUNC(i.started_at),
     CASE
         WHEN EXTRACT(HOUR FROM i.started_at) BETWEEN 6 AND 14 THEN 'SHIFT_A'
@@ -111,8 +113,8 @@ GROUP BY TRUNC(i.started_at),
         ELSE 'SHIFT_C'
     END;
 
--- VW_OVERRIDE_SUMMARY: Manager override activity
-CREATE OR REPLACE VIEW vw_override_summary AS
+-- VW_CAM_OVERRIDE_SUMMARY: Manager override activity
+CREATE OR REPLACE VIEW vw_cam_override_summary AS
 SELECT
     o.override_id,
     o.inspection_id,
@@ -127,7 +129,7 @@ SELECT
     o.override_result,
     o.reason,
     o.created_at
-FROM overrides o
-JOIN inspections i ON i.inspection_id = o.inspection_id
-JOIN users m_u ON m_u.user_id = o.manager_id
-JOIN checklist_items ci ON ci.checklist_item_id = o.checklist_item_id;
+FROM tcl_cam_override o
+JOIN tcl_cam_inspection i ON i.inspection_id = o.inspection_id
+JOIN tcl_cam_useraccess m_u ON m_u.useraccess_id = o.manager_id
+JOIN tcl_cam_checklist_item ci ON ci.checklist_item_id = o.checklist_item_id;
